@@ -26,34 +26,51 @@ This was scaffolded without a live connection to `geo.vliz.be` available
 in the dev environment it was built in, so a few things are unverified
 and **must be checked before relying on this**:
 
-- [ ] `lib/ingest.js` matches layers by title keyword against a live
+- [ ] `lib/layers.js` matches layers by title keyword against a live
       `GetCapabilities` response rather than hardcoded `typeName`s --
-      run `npm run ingest` (no `--confirm`) first and check the printed
-      matches look right before doing a real import.
+      run `scripts/fetch-and-commit-data.sh` and check the printed
+      matches look right before letting it commit.
 - [ ] `index.js`'s resource-provider registration call
       (`app.resourcesApi.register(...)`) needs verifying against the
       actual `@signalk/server-api` version in use -- the shape of this
       API has changed across server versions.
 - [ ] Per-layer `citation` text isn't populated yet (see TODO in
-      `lib/ingest.js`) -- currently only `license` is set. Pull the exact
-      citation strings from https://marineregions.org/sources.php per
-      layer, since these are the required attribution text, not just the
-      license name.
+      `lib/fetch-raw.js`) -- currently only `license` is set. Pull the
+      exact citation strings from https://marineregions.org/sources.php
+      per layer, since these are the required attribution text, not just
+      the license name.
 
 ## Usage
 
+There are two separate steps, deliberately split so only one of them ever
+needs live internet access to marineregions.org:
+
+**1. Fetch raw data from marineregions.org and commit it** (occasional --
+only needed to pull in a new dataset version):
+
 ```bash
-npm install
-
-# Dry run -- discovers layers and prints matches, writes nothing
-npm run ingest
-
-# Real import -- fetches all features and loads them into SQLite
-npm run ingest -- --confirm
+scripts/fetch-and-commit-data.sh          # fetch + commit locally
+scripts/fetch-and-commit-data.sh --push   # fetch + commit + push to origin
 ```
 
-Data is stored in `data/marineregions.sqlite` (or the SignalK plugin data
-directory when run as part of the plugin, via `app.getDataDirPath()`).
+This runs `lib/fetch-raw.js`, which calls `GetCapabilities`, matches
+layers by title, downloads each one as GeoJSON, and writes it to
+`sources/<layer_key>.geojson` plus `sources/manifest.json` (per-layer
+typeName/title/license/feature count). Those files get committed to the
+repo as the versioned source-of-truth snapshot.
+
+**2. Build the local SQLite database from the committed sources** (runs
+offline, no network needed -- this is what the plugin does on startup):
+
+```bash
+npm install
+npm run ingest
+```
+
+This reads `sources/*.geojson` + `sources/manifest.json` and loads them
+into `data/marineregions.sqlite` (or the SignalK plugin data directory
+when run as part of the plugin, via `app.getDataDirPath()`). `data/` and
+`*.sqlite` are gitignored -- only the raw sources are versioned.
 
 ## Resource API
 

@@ -4,6 +4,7 @@
   "description": "SignalK resource provider serving the Maritime Boundaries Geodatabase (EEZ, territorial seas, contiguous zones, internal waters, archipelagic waters, high seas, extended continental shelves) from marineregions.org",
   "main": "index.js",
   "scripts": {
+    "fetch-data": "node lib/fetch-raw.js",
     "ingest": "node lib/ingest.js"
   },
   "keywords": [
