@@ -1,0 +1,26 @@
+{
+  "name": "signalk-marineregions-provider",
+  "version": "0.1.0",
+  "description": "SignalK resource provider serving the Maritime Boundaries Geodatabase (EEZ, territorial seas, contiguous zones, internal waters, archipelagic waters, high seas, extended continental shelves) from marineregions.org",
+  "main": "index.js",
+  "scripts": {
+    "ingest": "node lib/ingest.js"
+  },
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-webapp",
+    "signalk-category-chart-plotters"
+  ],
+  "author": "Tobias Rosenstock",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BoatHacks/signalk-marineregions-provider.git"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  }
+}
