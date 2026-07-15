@@ -59,6 +59,20 @@ layers by title, downloads each one as GeoJSON, and writes it to
 typeName/title/license/feature count). Those files get committed to the
 repo as the versioned source-of-truth snapshot.
 
+If you're running this directly on a resource-constrained SignalK server
+(low RAM), the WFS page size defaults to 25 features per request to keep
+peak memory bounded regardless of how few total features a layer has --
+some individual EEZ polygons are large enough on their own to strain a
+small device even at that size. Tune it with:
+
+```bash
+MARINEREGIONS_PAGE_SIZE=10 scripts/fetch-and-commit-data.sh
+```
+
+or run the fetch step on a beefier machine and just commit/push the
+resulting `sources/` files from there -- the ingest/build step and the
+plugin itself don't need much memory, only the initial fetch does.
+
 **2. Build the local SQLite database from the committed sources** (runs
 offline, no network needed -- this is what the plugin does on startup):
 
