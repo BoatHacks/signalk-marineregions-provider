@@ -2,6 +2,7 @@
 
 const path = require('node:path')
 const { openDb } = require('./lib/db')
+const { LAYER_MATCHERS, allLayerKeys } = require('./lib/layers')
 
 module.exports = function (app) {
   const plugin = {}
@@ -18,8 +19,23 @@ module.exports = function (app) {
         type: 'string',
         title: 'Resource type name to register under',
         default: 'marineregions',
+        description: 'Exposed at /signalk/v1/api/resources/<this>.'
+      },
+      enabledLayers: {
+        type: 'array',
+        title: 'Boundaries to download and serve',
         description:
-          'Exposed at /signalk/v1/api/resources/<this>. Data is read-only reference data -- run the ingest script separately (npm run ingest -- --confirm) to populate/update it.'
+          'Selecting fewer layers here reduces download size and disk usage (full set is ~700MB at full resolution). ' +
+          'This selection is NOT fetched automatically -- after saving, run "npm run fetch-data" then "npm run ingest" ' +
+          '(both pick up this same selection from the plugin config) to actually download/build the data. All layers ' +
+          'are CC-BY 4.0 licensed by marineregions.org (VLIZ) -- attribution is required wherever this data is displayed.',
+        items: {
+          type: 'string',
+          enum: LAYER_MATCHERS.map((m) => m.layerKey),
+          enumNames: LAYER_MATCHERS.map((m) => m.label)
+        },
+        uniqueItems: true,
+        default: allLayerKeys()
       }
     }
   }
@@ -31,6 +47,8 @@ module.exports = function (app) {
     db = openDb(dataDir)
 
     const resourceType = options.resourceType || 'marineregions'
+    const enabledLayers =
+      options.enabledLayers && options.enabledLayers.length > 0 ? options.enabledLayers : allLayerKeys()
 
     // NOTE: verify this against the @signalk/server-api version actually
     // installed -- the resources-provider registration shape has moved
@@ -41,8 +59,8 @@ module.exports = function (app) {
       app.resourcesApi.register(plugin.id, {
         types: [resourceType],
         methods: {
-          listResources: (type, query) => listResources(db, query),
-          getResource: (type, id) => getResource(db, id),
+          listResources: (type, query) => listResources(db, query, enabledLayers),
+          getResource: (type, id) => getResource(db, id, enabledLayers),
           setResource: () => {
             throw new Error('marineregions resources are read-only reference data')
           },
@@ -51,7 +69,9 @@ module.exports = function (app) {
           }
         }
       })
-      app.debug(`Registered marineregions resource provider under type "${resourceType}"`)
+      app.debug(
+        `Registered marineregions resource provider under type "${resourceType}" serving layers: ${enabledLayers.join(', ')}`
+      )
     } else {
       app.error(
         'app.resourcesApi.register was not found -- this plugin needs its resource-provider registration call updated to match the installed SignalK server-api version.'
@@ -69,9 +89,15 @@ module.exports = function (app) {
   return plugin
 }
 
-function listResources(db, query = {}) {
+function listResources(db, query = {}, enabledLayers) {
   const clauses = []
   const params = []
+
+  // Always scope to the configured layer selection, regardless of what
+  // might still be sitting in the sqlite db from a previous config.
+  const placeholders = enabledLayers.map(() => '?').join(',')
+  clauses.push(`layer_key IN (${placeholders})`)
+  params.push(...enabledLayers)
 
   if (query.layer) {
     clauses.push('layer_key = ?')
@@ -91,9 +117,10 @@ function listResources(db, query = {}) {
   return Object.fromEntries(rows.map((row) => [row.id, rowToFeature(row)]))
 }
 
-function getResource(db, id) {
+function getResource(db, id, enabledLayers) {
   const row = db.prepare('SELECT * FROM features WHERE id = ?').get(id)
   if (!row) return null
+  if (!enabledLayers.includes(row.layer_key)) return null
   return rowToFeature(row)
 }
 

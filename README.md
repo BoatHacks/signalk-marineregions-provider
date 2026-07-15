@@ -45,6 +45,45 @@ and **must be checked before relying on this**:
       considering geometry simplification (e.g. via `@turf/simplify` or
       `mapshaper`) if that footprint turns out to matter on real devices
       -- untried so far.
+- [ ] The `enabledLayers` config schema uses a standard JSON Schema
+      `array` + `enum`/`enumNames` pattern, which react-jsonschema-form
+      typically renders as a multi-select or checkbox list -- but this
+      hasn't been checked against your actual admin UI yet. If it renders
+      as something unusable, the schema itself is the thing to adjust
+      (e.g. explicit `uiSchema` hints), not the underlying data model.
+
+## Choosing which boundaries to use
+
+The plugin's config page in the SignalK admin UI (Server -> Plugin Config
+-> Marine Regions provider) has a checklist of the eight available
+layers, all selected by default. Two things this controls:
+
+- **What gets served**: the resource provider only ever returns features
+  from currently-selected layers, even if other layers still exist in the
+  local SQLite db from an earlier config.
+- **What the fetch/build scripts process**: the same layer keys can be
+  passed directly to the CLI scripts (see below), so you only download
+  and build what you've actually selected -- meaningful given the full
+  set is ~700MB.
+
+Saving the config in the admin UI does **not** trigger a download by
+itself -- there's no automatic live fetch from the running plugin, on
+purpose (this data is large enough that fetching it from inside a
+resource-constrained SignalK server process risks the exact OOM issues
+this plugin's fetch step has already hit standalone). After changing the
+selection, run the fetch/build steps yourself with a matching `--layers`
+list:
+
+```bash
+npm run fetch-data -- --layers=eez,eez_12nm
+npm run ingest -- --layers=eez,eez_12nm
+```
+
+Layer keys: `eez`, `eez_12nm`, `eez_24nm`, `eez_internal_waters`,
+`eez_archipelagic_waters`, `high_seas`, `ecs`, `ecs_boundaries`.
+
+Deselecting a layer and re-running these cleans up its files/db rows to
+reclaim space, rather than just hiding it.
 
 ## Usage
 
@@ -93,11 +132,11 @@ when run as part of the plugin, via `app.getDataDirPath()`).
 ## Resource API
 
 Once running as a SignalK plugin, resources are exposed at
-`/signalk/v1/api/resources/marineregions` (configurable). Supported query
-params on list:
+`/signalk/v1/api/resources/marineregions` (configurable). Only layers
+selected in the plugin config (see above) are ever returned. Supported
+query params on list:
 
-- `layer` -- filter to one layer key (`eez`, `eez_12nm`, `eez_24nm`,
-  `eez_internal_waters`, `eez_archipelagic_waters`, `high_seas`, `ecs`)
+- `layer` -- filter to one layer key (must also be enabled in config)
 - `bbox` -- `west,south,east,north`
 
 This is reference data -- `setResource`/`deleteResource` are intentionally
